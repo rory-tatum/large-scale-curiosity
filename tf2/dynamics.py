@@ -24,7 +24,7 @@ class Dynamics(object):
 
         self.out_features = self.auxiliary_task.next_features
 
-        with tf.variable_scope(self.scope + "_loss"):
+        with tf.compat.v1.variable_scope(self.scope + "_loss"):
             self.loss = self.get_loss()
 
     def get_features(self, x, reuse):
@@ -33,8 +33,8 @@ class Dynamics(object):
         if x_has_timesteps:
             sh = tf.shape(x)
             x = flatten_two_dims(x)
-        with tf.variable_scope(self.scope + "_features", reuse=reuse):
-            x = (tf.to_float(x) - self.ob_mean) / self.ob_std
+        with tf.compat.v1.variable_scope(self.scope + "_features", reuse=reuse):
+            x = (tf.cast(x, dtype=tf.float32) - self.ob_mean) / self.ob_std
             x = small_convnet(x, nl=nl, feat_dim=self.feat_dim, last_nl=nl, layernormalize=False)
         if x_has_timesteps:
             x = unflatten_first_dim(x, sh)
@@ -48,19 +48,19 @@ class Dynamics(object):
         def add_ac(x):
             return tf.concat([x, ac], axis=-1)
 
-        with tf.variable_scope(self.scope):
+        with tf.compat.v1.variable_scope(self.scope):
             x = flatten_two_dims(self.features)
-            x = tf.layers.dense(add_ac(x), self.hidsize, activation=tf.nn.leaky_relu)
+            x = tf.compat.v1.layers.dense(add_ac(x), self.hidsize, activation=tf.nn.leaky_relu)
 
             def residual(x):
-                res = tf.layers.dense(add_ac(x), self.hidsize, activation=tf.nn.leaky_relu)
-                res = tf.layers.dense(add_ac(res), self.hidsize, activation=None)
+                res = tf.compat.v1.layers.dense(add_ac(x), self.hidsize, activation=tf.nn.leaky_relu)
+                res = tf.compat.v1.layers.dense(add_ac(res), self.hidsize, activation=None)
                 return x + res
 
             for _ in range(4):
                 x = residual(x)
             n_out_features = self.out_features.get_shape()[-1].value
-            x = tf.layers.dense(add_ac(x), n_out_features, activation=None)
+            x = tf.compat.v1.layers.dense(add_ac(x), n_out_features, activation=None)
             x = unflatten_first_dim(x, sh)
         return tf.reduce_mean((x - tf.stop_gradient(self.out_features)) ** 2, -1)
 
@@ -103,7 +103,7 @@ class UNet(Dynamics):
                     [x, ac_four_dim + tf.zeros([sh[0], sh[1], sh[2], ac_four_dim.get_shape()[3].value], tf.float32)],
                     axis=-1)
 
-        with tf.variable_scope(self.scope):
+        with tf.compat.v1.variable_scope(self.scope):
             x = flatten_two_dims(self.features)
             x = unet(x, nl=nl, feat_dim=self.feat_dim, cond=add_ac)
             x = unflatten_first_dim(x, sh)

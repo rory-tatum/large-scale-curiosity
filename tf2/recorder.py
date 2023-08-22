@@ -1,7 +1,7 @@
 import os
 import pickle
 
-from baselines import logger
+from stable_baselines3.common import logger
 from mpi4py import MPI
 
 

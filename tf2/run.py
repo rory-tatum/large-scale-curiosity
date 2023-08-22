@@ -9,9 +9,10 @@ from functools import partial
 
 import gym
 import tensorflow as tf
-from baselines import logger
-from baselines.bench import Monitor
-from baselines.common.atari_wrappers import NoopResetEnv, FrameStack
+from stable_baselines3.common import logger
+from stable_baselines3.common.monitor import Monitor
+from stable_baselines3.common.atari_wrappers import NoopResetEnv
+from stable_baselines3.common.vec_env.vec_frame_stack import VecFrameStack
 from mpi4py import MPI
 
 from auxiliary_tasks import FeatureExtractor, InverseDynamics, VAE, JustPixels
@@ -147,7 +148,7 @@ def make_env_all_params(rank, add_monitor, args):
 
 def get_experiment_environment(**args):
     from utils import setup_mpi_gpus, setup_tensorflow_session
-    from baselines.common import set_global_seeds
+    from stable_baselines3.common import set_global_seeds
     from gym.utils.seeding import hash_seed
     process_seed = args["seed"] + 1000 * MPI.COMM_WORLD.Get_rank()
     process_seed = hash_seed(process_seed, max_bytes=4)

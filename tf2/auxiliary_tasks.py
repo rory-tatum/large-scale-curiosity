@@ -17,8 +17,8 @@ class FeatureExtractor(object):
         self.obs = self.policy.ph_ob
         self.ob_mean = self.policy.ob_mean
         self.ob_std = self.policy.ob_std
-        with tf.variable_scope(scope):
-            self.last_ob = tf.placeholder(dtype=tf.int32,
+        with tf.compat.v1.variable_scope(scope):
+            self.last_ob = tf.compat.v1.placeholder(dtype=tf.int32,
                                           shape=(None, 1) + self.ob_space.shape, name='last_ob')
             self.next_ob = tf.concat([self.obs[:, 1:], self.last_ob], 1)
 
@@ -41,8 +41,8 @@ class FeatureExtractor(object):
         if x_has_timesteps:
             sh = tf.shape(x)
             x = flatten_two_dims(x)
-        with tf.variable_scope(self.scope + "_features", reuse=reuse):
-            x = (tf.to_float(x) - self.ob_mean) / self.ob_std
+        with tf.compat.v1.variable_scope(self.scope + "_features", reuse=reuse):
+            x = (tf.cast(x, dtype=tf.float32) - self.ob_mean) / self.ob_std
             x = small_convnet(x, nl=nl, feat_dim=self.feat_dim, last_nl=None, layernormalize=self.layernormalize)
         if x_has_timesteps:
             x = unflatten_first_dim(x, sh)
@@ -59,7 +59,7 @@ class InverseDynamics(FeatureExtractor):
                                               feat_dim=feat_dim, layernormalize=layernormalize)
 
     def get_loss(self):
-        with tf.variable_scope(self.scope):
+        with tf.compat.v1.variable_scope(self.scope):
             x = tf.concat([self.features, self.next_features], 2)
             sh = tf.shape(x)
             x = flatten_two_dims(x)
@@ -86,23 +86,23 @@ class VAE(FeatureExtractor):
         if x_has_timesteps:
             sh = tf.shape(x)
             x = flatten_two_dims(x)
-        with tf.variable_scope(self.scope + "_features", reuse=reuse):
-            x = (tf.to_float(x) - self.ob_mean) / self.ob_std
+        with tf.compat.v1.variable_scope(self.scope + "_features", reuse=reuse):
+            x = (tf.cast(x, dtype=tf.float32) - self.ob_mean) / self.ob_std
             x = small_convnet(x, nl=nl, feat_dim=2 * self.feat_dim, last_nl=None, layernormalize=False)
         if x_has_timesteps:
             x = unflatten_first_dim(x, sh)
         return x
 
     def get_loss(self):
-        with tf.variable_scope(self.scope):
+        with tf.compat.v1.variable_scope(self.scope):
             posterior_mean, posterior_scale = tf.split(self.features, 2, -1)
             posterior_scale = tf.nn.softplus(posterior_scale)
-            posterior_distribution = tf.distributions.Normal(loc=posterior_mean, scale=posterior_scale)
+            posterior_distribution = tf.compat.v1.distributions.Normal(loc=posterior_mean, scale=posterior_scale)
 
             sh = tf.shape(posterior_mean)
-            prior = tf.distributions.Normal(loc=tf.zeros(sh), scale=tf.ones(sh))
+            prior = tf.compat.v1.distributions.Normal(loc=tf.zeros(sh), scale=tf.ones(sh))
 
-            posterior_kl = tf.distributions.kl_divergence(posterior_distribution, prior)
+            posterior_kl = tf.compat.v1.distributions.kl_divergence(posterior_distribution, prior)
 
             posterior_kl = tf.reduce_sum(posterior_kl, [-1])
             assert posterior_kl.get_shape().ndims == 2
@@ -118,7 +118,7 @@ class VAE(FeatureExtractor):
             return - likelihood_lower_bound
 
     def add_noise_and_normalize(self, x):
-        x = tf.to_float(x) + tf.random_uniform(shape=tf.shape(x), minval=0., maxval=1.)
+        x = tf.cast(x, dtype=tf.float32) + tf.random.uniform(shape=tf.shape(x), minval=0., maxval=1.)
         x = (x - self.ob_mean) / self.ob_std
         return x
 
@@ -128,13 +128,13 @@ class VAE(FeatureExtractor):
         if z_has_timesteps:
             sh = tf.shape(z)
             z = flatten_two_dims(z)
-        with tf.variable_scope(self.scope + "decoder"):
+        with tf.compat.v1.variable_scope(self.scope + "decoder"):
             z = small_deconvnet(z, nl=nl, ch=4 if self.spherical_obs else 8, positional_bias=True)
             if z_has_timesteps:
                 z = unflatten_first_dim(z, sh)
             if self.spherical_obs:
-                scale = tf.get_variable(name="scale", shape=(), dtype=tf.float32,
-                                        initializer=tf.ones_initializer())
+                scale = tf.compat.v1.get_variable(name="scale", shape=(), dtype=tf.float32,
+                                        initializer=tf.compat.v1.ones_initializer())
                 scale = tf.maximum(scale, -4.)
                 scale = tf.nn.softplus(scale)
                 scale = scale * tf.ones_like(z)
@@ -142,7 +142,7 @@ class VAE(FeatureExtractor):
                 z, scale = tf.split(z, 2, -1)
                 scale = tf.nn.softplus(scale)
             # scale = tf.Print(scale, [scale])
-            return tf.distributions.Normal(loc=z, scale=scale)
+            return tf.compat.v1.distributions.Normal(loc=z, scale=scale)
 
 
 class JustPixels(FeatureExtractor):
@@ -155,8 +155,8 @@ class JustPixels(FeatureExtractor):
                                          feat_dim=None, layernormalize=None)
 
     def get_features(self, x, reuse):
-        with tf.variable_scope(self.scope + "_features", reuse=reuse):
-            x = (tf.to_float(x) - self.ob_mean) / self.ob_std
+        with tf.compat.v1.variable_scope(self.scope + "_features", reuse=reuse):
+            x = (tf.cast(x, dtype=tf.float32) - self.ob_mean) / self.ob_std
         return x
 
     def get_loss(self):

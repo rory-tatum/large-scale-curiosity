@@ -2,9 +2,9 @@ import time
 
 import numpy as np
 import tensorflow as tf
-from baselines.common import explained_variance
-from baselines.common.mpi_moments import mpi_moments
-from baselines.common.running_mean_std import RunningMeanStd
+from stable_baselines3.common import explained_variance
+from stable_baselines3.common.mpi_moments import mpi_moments
+from stable_baselines3.common.running_mean_std import RunningMeanStd
 from mpi4py import MPI
 
 from mpi_utils import MpiAdamOptimizer
@@ -12,7 +12,7 @@ from rollouts import Rollout
 from utils import bcast_tf_vars_from_root, get_mean_and_std
 from vec_env import ShmemVecEnv as VecEnv
 
-getsess = tf.get_default_session
+getsess = tf.compat.v1.get_default_session
 
 
 class PpoOptimizer(object):
@@ -24,7 +24,7 @@ class PpoOptimizer(object):
                  normrew, normadv, use_news, ext_coeff, int_coeff,
                  nsteps_per_seg, nsegs_per_env, dynamics):
         self.dynamics = dynamics
-        with tf.variable_scope(scope):
+        with tf.compat.v1.variable_scope(scope):
             self.use_recorder = True
             self.n_updates = 0
             self.scope = scope
@@ -44,13 +44,13 @@ class PpoOptimizer(object):
             self.use_news = use_news
             self.ext_coeff = ext_coeff
             self.int_coeff = int_coeff
-            self.ph_adv = tf.placeholder(tf.float32, [None, None])
-            self.ph_ret = tf.placeholder(tf.float32, [None, None])
-            self.ph_rews = tf.placeholder(tf.float32, [None, None])
-            self.ph_oldnlp = tf.placeholder(tf.float32, [None, None])
-            self.ph_oldvpred = tf.placeholder(tf.float32, [None, None])
-            self.ph_lr = tf.placeholder(tf.float32, [])
-            self.ph_cliprange = tf.placeholder(tf.float32, [])
+            self.ph_adv = tf.compat.v1.placeholder(tf.float32, [None, None])
+            self.ph_ret = tf.compat.v1.placeholder(tf.float32, [None, None])
+            self.ph_rews = tf.compat.v1.placeholder(tf.float32, [None, None])
+            self.ph_oldnlp = tf.compat.v1.placeholder(tf.float32, [None, None])
+            self.ph_oldvpred = tf.compat.v1.placeholder(tf.float32, [None, None])
+            self.ph_lr = tf.compat.v1.placeholder(tf.float32, [])
+            self.ph_cliprange = tf.compat.v1.placeholder(tf.float32, [])
             neglogpac = self.stochpol.pd.neglogp(self.stochpol.ph_ac)
             entropy = tf.reduce_mean(self.stochpol.pd.entropy())
             vpred = self.stochpol.vpred
@@ -64,7 +64,7 @@ class PpoOptimizer(object):
             pg_loss = tf.reduce_mean(pg_loss_surr)
             ent_loss = (- ent_coef) * entropy
             approxkl = .5 * tf.reduce_mean(tf.square(neglogpac - self.ph_oldnlp))
-            clipfrac = tf.reduce_mean(tf.to_float(tf.abs(pg_losses2 - pg_loss_surr) > 1e-6))
+            clipfrac = tf.reduce_mean(tf.cast(tf.abs(pg_losses2 - pg_loss_surr) > 1e-6, dtype=tf.float32))
 
             self.total_loss = pg_loss + ent_loss + vf_loss
             self.to_report = {'tot': self.total_loss, 'pg': pg_loss, 'vf': vf_loss, 'ent': entropy,
@@ -73,17 +73,17 @@ class PpoOptimizer(object):
     def start_interaction(self, env_fns, dynamics, nlump=2):
         self.loss_names, self._losses = zip(*list(self.to_report.items()))
 
-        params = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES)
+        params = tf.compat.v1.get_collection(tf.compat.v1.GraphKeys.TRAINABLE_VARIABLES)
         if MPI.COMM_WORLD.Get_size() > 1:
             trainer = MpiAdamOptimizer(learning_rate=self.ph_lr, comm=MPI.COMM_WORLD)
         else:
-            trainer = tf.train.AdamOptimizer(learning_rate=self.ph_lr)
+            trainer = tf.compat.v1.train.AdamOptimizer(learning_rate=self.ph_lr)
         gradsandvars = trainer.compute_gradients(self.total_loss, params)
         self._train = trainer.apply_gradients(gradsandvars)
 
         if MPI.COMM_WORLD.Get_rank() == 0:
-            getsess().run(tf.variables_initializer(tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES)))
-        bcast_tf_vars_from_root(getsess(), tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES))
+            getsess().run(tf.compat.v1.variables_initializer(tf.compat.v1.get_collection(tf.compat.v1.GraphKeys.GLOBAL_VARIABLES)))
+        bcast_tf_vars_from_root(getsess(), tf.compat.v1.get_collection(tf.compat.v1.GraphKeys.GLOBAL_VARIABLES))
 
         self.all_visited_rooms = []
         self.all_scores = []

@@ -242,7 +242,7 @@ def make_mario_env(crop=True, frame_stack=True, clip_rewards=False):
     assert clip_rewards is False
     import gym
     import retro
-    from baselines.common.atari_wrappers import FrameStack
+    from stable_baselines3.common.atari_wrappers import FrameStack
 
     gym.undo_logger_setup()
     env = retro.make('SuperMarioBros-Nes', 'Level1-1')
@@ -311,7 +311,7 @@ class NoReward(gym.Wrapper):
 def make_multi_pong(frame_stack=True):
     import gym
     import retro
-    from baselines.common.atari_wrappers import FrameStack
+    from stable_baselines3.common.atari_wrappers import FrameStack
     gym.undo_logger_setup()
     game_env = env = retro.make('Pong-Atari2600', players=2)
     env = RetroALEActions(env, game_env.BUTTONS, n_players=2)
@@ -325,7 +325,7 @@ def make_multi_pong(frame_stack=True):
 
 
 def make_robo_pong(frame_stack=True):
-    from baselines.common.atari_wrappers import FrameStack
+    from stable_baselines3.common.atari_wrappers import FrameStack
     import roboenvs as robo
 
     env = robo.make_robopong()
@@ -340,7 +340,7 @@ def make_robo_pong(frame_stack=True):
 
 
 def make_robo_hockey(frame_stack=True):
-    from baselines.common.atari_wrappers import FrameStack
+    from stable_baselines3.common.atari_wrappers import FrameStack
     import roboenvs as robo
 
     env = robo.make_robohockey()

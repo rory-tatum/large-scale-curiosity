@@ -5,7 +5,7 @@ from functools import partial
 
 import numpy as np
 import tensorflow as tf
-from baselines.common.tf_util import normc_initializer
+from stable_baselines3.common.tf_util import normc_initializer
 from mpi4py import MPI
 
 
@@ -22,7 +22,7 @@ def bcast_tf_vars_from_root(sess, vars):
         if rank == 0:
             MPI.COMM_WORLD.bcast(sess.run(var))
         else:
-            sess.run(tf.assign(var, MPI.COMM_WORLD.bcast(None)))
+            sess.run(tf.compat.v1.assign(var, MPI.COMM_WORLD.bcast(None)))
 
 
 def get_mean_and_std(array):
@@ -77,11 +77,11 @@ def guess_available_cpus():
 def setup_tensorflow_session():
     num_cpu = guess_available_cpus()
 
-    tf_config = tf.ConfigProto(
+    tf_config = tf.compat.v1.ConfigProto(
         inter_op_parallelism_threads=num_cpu,
         intra_op_parallelism_threads=num_cpu
     )
-    return tf.Session(config=tf_config)
+    return tf.compat.v1.Session(config=tf_config)
 
 
 def random_agent_ob_mean_std(env, nsteps=10000):
@@ -105,13 +105,13 @@ def random_agent_ob_mean_std(env, nsteps=10000):
 
 
 def layernorm(x):
-    m, v = tf.nn.moments(x, -1, keep_dims=True)
+    m, v = tf.nn.moments(x, -1, keepdims=True)
     return (x - m) / (tf.sqrt(v) + 1e-8)
 
 
-getsess = tf.get_default_session
+getsess = tf.compat.v1.get_default_session
 
-fc = partial(tf.layers.dense, kernel_initializer=normc_initializer(1.))
+fc = partial(tf.compat.v1.layers.dense, kernel_initializer=normc_initializer(1.))
 activ = tf.nn.relu
 
 
@@ -124,17 +124,17 @@ def unflatten_first_dim(x, sh):
 
 
 def add_pos_bias(x):
-    with tf.variable_scope(name_or_scope=None, default_name="pos_bias"):
-        b = tf.get_variable(name="pos_bias", shape=[1] + x.get_shape().as_list()[1:], dtype=tf.float32,
-                            initializer=tf.zeros_initializer())
+    with tf.compat.v1.variable_scope(name_or_scope=None, default_name="pos_bias"):
+        b = tf.compat.v1.get_variable(name="pos_bias", shape=[1] + x.get_shape().as_list()[1:], dtype=tf.float32,
+                            initializer=tf.compat.v1.zeros_initializer())
         return x + b
 
 
 def small_convnet(x, nl, feat_dim, last_nl, layernormalize, batchnorm=False):
-    bn = tf.layers.batch_normalization if batchnorm else lambda x: x
-    x = bn(tf.layers.conv2d(x, filters=32, kernel_size=8, strides=(4, 4), activation=nl))
-    x = bn(tf.layers.conv2d(x, filters=64, kernel_size=4, strides=(2, 2), activation=nl))
-    x = bn(tf.layers.conv2d(x, filters=64, kernel_size=3, strides=(1, 1), activation=nl))
+    bn = tf.compat.v1.layers.batch_normalization if batchnorm else lambda x: x
+    x = bn(tf.compat.v1.layers.conv2d(x, filters=32, kernel_size=8, strides=(4, 4), activation=nl))
+    x = bn(tf.compat.v1.layers.conv2d(x, filters=64, kernel_size=4, strides=(2, 2), activation=nl))
+    x = bn(tf.compat.v1.layers.conv2d(x, filters=64, kernel_size=3, strides=(1, 1), activation=nl))
     x = tf.reshape(x, (-1, np.prod(x.get_shape().as_list()[1:])))
     x = bn(fc(x, units=feat_dim, activation=None))
     if last_nl is not None:
@@ -148,11 +148,11 @@ def small_deconvnet(z, nl, ch, positional_bias):
     sh = (8, 8, 64)
     z = fc(z, np.prod(sh), activation=nl)
     z = tf.reshape(z, (-1, *sh))
-    z = tf.layers.conv2d_transpose(z, 128, kernel_size=4, strides=(2, 2), activation=nl, padding='same')
+    z = tf.compat.v1.layers.conv2d_transpose(z, 128, kernel_size=4, strides=(2, 2), activation=nl, padding='same')
     assert z.get_shape().as_list()[1:3] == [16, 16]
-    z = tf.layers.conv2d_transpose(z, 64, kernel_size=8, strides=(2, 2), activation=nl, padding='same')
+    z = tf.compat.v1.layers.conv2d_transpose(z, 64, kernel_size=8, strides=(2, 2), activation=nl, padding='same')
     assert z.get_shape().as_list()[1:3] == [32, 32]
-    z = tf.layers.conv2d_transpose(z, ch, kernel_size=8, strides=(3, 3), activation=None, padding='same')
+    z = tf.compat.v1.layers.conv2d_transpose(z, ch, kernel_size=8, strides=(3, 3), activation=None, padding='same')
     assert z.get_shape().as_list()[1:3] == [96, 96]
     z = z[:, 6:-6, 6:-6]
     assert z.get_shape().as_list()[1:3] == [84, 84]
@@ -162,16 +162,16 @@ def small_deconvnet(z, nl, ch, positional_bias):
 
 
 def unet(x, nl, feat_dim, cond, batchnorm=False):
-    bn = tf.layers.batch_normalization if batchnorm else lambda x: x
+    bn = tf.compat.v1.layers.batch_normalization if batchnorm else lambda x: x
     layers = []
     x = tf.pad(x, [[0, 0], [6, 6], [6, 6], [0, 0]])
-    x = bn(tf.layers.conv2d(cond(x), filters=32, kernel_size=8, strides=(3, 3), activation=nl, padding='same'))
+    x = bn(tf.compat.v1.layers.conv2d(cond(x), filters=32, kernel_size=8, strides=(3, 3), activation=nl, padding='same'))
     assert x.get_shape().as_list()[1:3] == [32, 32]
     layers.append(x)
-    x = bn(tf.layers.conv2d(cond(x), filters=64, kernel_size=8, strides=(2, 2), activation=nl, padding='same'))
+    x = bn(tf.compat.v1.layers.conv2d(cond(x), filters=64, kernel_size=8, strides=(2, 2), activation=nl, padding='same'))
     layers.append(x)
     assert x.get_shape().as_list()[1:3] == [16, 16]
-    x = bn(tf.layers.conv2d(cond(x), filters=64, kernel_size=4, strides=(2, 2), activation=nl, padding='same'))
+    x = bn(tf.compat.v1.layers.conv2d(cond(x), filters=64, kernel_size=4, strides=(2, 2), activation=nl, padding='same'))
     layers.append(x)
     assert x.get_shape().as_list()[1:3] == [8, 8]
 
@@ -179,8 +179,8 @@ def unet(x, nl, feat_dim, cond, batchnorm=False):
     x = fc(cond(x), units=feat_dim, activation=nl)
 
     def residual(x):
-        res = bn(tf.layers.dense(cond(x), feat_dim, activation=tf.nn.leaky_relu))
-        res = tf.layers.dense(cond(res), feat_dim, activation=None)
+        res = bn(tf.compat.v1.layers.dense(cond(x), feat_dim, activation=tf.nn.leaky_relu))
+        res = tf.compat.v1.layers.dense(cond(res), feat_dim, activation=None)
         return x + res
 
     for _ in range(4):
@@ -190,13 +190,13 @@ def unet(x, nl, feat_dim, cond, batchnorm=False):
     x = fc(cond(x), np.prod(sh), activation=nl)
     x = tf.reshape(x, (-1, *sh))
     x += layers.pop()
-    x = bn(tf.layers.conv2d_transpose(cond(x), 64, kernel_size=4, strides=(2, 2), activation=nl, padding='same'))
+    x = bn(tf.compat.v1.layers.conv2d_transpose(cond(x), 64, kernel_size=4, strides=(2, 2), activation=nl, padding='same'))
     assert x.get_shape().as_list()[1:3] == [16, 16]
     x += layers.pop()
-    x = bn(tf.layers.conv2d_transpose(cond(x), 32, kernel_size=8, strides=(2, 2), activation=nl, padding='same'))
+    x = bn(tf.compat.v1.layers.conv2d_transpose(cond(x), 32, kernel_size=8, strides=(2, 2), activation=nl, padding='same'))
     assert x.get_shape().as_list()[1:3] == [32, 32]
     x += layers.pop()
-    x = tf.layers.conv2d_transpose(cond(x), 4, kernel_size=8, strides=(3, 3), activation=None, padding='same')
+    x = tf.compat.v1.layers.conv2d_transpose(cond(x), 4, kernel_size=8, strides=(3, 3), activation=None, padding='same')
     assert x.get_shape().as_list()[1:3] == [96, 96]
     x = x[:, 6:-6, 6:-6]
     assert x.get_shape().as_list()[1:3] == [84, 84]

@@ -1,5 +1,5 @@
 import tensorflow as tf
-from baselines.common.distributions import make_pdtype
+from stable_baselines3.common.distributions import make_pdtype
 
 from utils import getsess, small_convnet, activ, fc, flatten_two_dims, unflatten_first_dim
 
@@ -13,11 +13,11 @@ class CnnPolicy(object):
         self.nl = nl
         self.ob_mean = ob_mean
         self.ob_std = ob_std
-        with tf.variable_scope(scope):
+        with tf.compat.v1.variable_scope(scope):
             self.ob_space = ob_space
             self.ac_space = ac_space
             self.ac_pdtype = make_pdtype(ac_space)
-            self.ph_ob = tf.placeholder(dtype=tf.int32,
+            self.ph_ob = tf.compat.v1.placeholder(dtype=tf.int32,
                                         shape=(None, None) + ob_space.shape, name='ob')
             self.ph_ac = self.ac_pdtype.sample_placeholder([None, None], name='ac')
             self.pd = self.vpred = None
@@ -31,7 +31,7 @@ class CnnPolicy(object):
             self.flat_features = self.get_features(x, reuse=False)
             self.features = unflatten_first_dim(self.flat_features, sh)
 
-            with tf.variable_scope(scope, reuse=False):
+            with tf.compat.v1.variable_scope(scope, reuse=False):
                 x = fc(self.flat_features, units=hidsize, activation=activ)
                 x = fc(x, units=hidsize, activation=activ)
                 pdparam = fc(x, name='pd', units=pdparamsize, activation=None)
@@ -49,8 +49,8 @@ class CnnPolicy(object):
             sh = tf.shape(x)
             x = flatten_two_dims(x)
 
-        with tf.variable_scope(self.scope + "_features", reuse=reuse):
-            x = (tf.to_float(x) - self.ob_mean) / self.ob_std
+        with tf.compat.v1.variable_scope(self.scope + "_features", reuse=reuse):
+            x = (tf.cast(x, dtype=tf.float32) - self.ob_mean) / self.ob_std
             x = small_convnet(x, nl=self.nl, feat_dim=self.feat_dim, last_nl=None, layernormalize=self.layernormalize)
 
         if x_has_timesteps:
