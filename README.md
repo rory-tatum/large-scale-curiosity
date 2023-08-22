@@ -1,3 +1,18 @@
+## Goals
+- Bring this code up to date and in line with the stable versions of other abandoned RL code for games (stable-baselines3, stable-retro)
+- Use the curiosity based RL ideas to train models to run games that I am interested in (Mega Man, Metroid, Donkey Kong, etc.)
+- Run experiments to see if we can combine curiosity with limited reward functions to steer the curiosity in a direction
+- See if there's carryover between games of the same genre
+
+## Plan
+- Write tests for existing code
+- Clean up and type annotate as much as possible
+- Convert everything to pytorch and stable-baselines3
+- Make sure tests are passing
+- Run Breakout and Mario since those were known working before
+- Integrate with stable-retro to open up the library of possible games and start experimenting with the games I want to do
+
+## Original README below
 **Status:** Archive (code is provided as-is, no updates expected)
 
 ## Large-Scale Study of Curiosity-Driven Learning ##
