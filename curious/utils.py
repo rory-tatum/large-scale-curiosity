@@ -117,7 +117,7 @@ def normc_initializer(std=1.0, axis=0):
     return _initializer
 
 fc = partial(tf.compat.v1.layers.dense, kernel_initializer=normc_initializer(1.))
-activ = torch.nn.relu
+activ = torch.nn.ReLU
 
 
 def flatten_two_dims(x):

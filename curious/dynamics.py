@@ -1,13 +1,12 @@
 import numpy as np
-import tensorflow as tf
+import torch
 
-from auxiliary_tasks import JustPixels
-from utils import small_convnet, flatten_two_dims, unflatten_first_dim, getsess, unet
+from curious.auxiliary_tasks import JustPixels
+from curious.utils import small_convnet, flatten_two_dims, unflatten_first_dim, unet
 
 
 class Dynamics(object):
-    def __init__(self, auxiliary_task, predict_from_pixels, feat_dim=None, scope='dynamics'):
-        self.scope = scope
+    def __init__(self, auxiliary_task, predict_from_pixels, feat_dim=None):
         self.auxiliary_task = auxiliary_task
         self.hidsize = self.auxiliary_task.hidsize
         self.feat_dim = feat_dim
@@ -20,49 +19,46 @@ class Dynamics(object):
         if predict_from_pixels:
             self.features = self.get_features(self.obs, reuse=False)
         else:
-            self.features = tf.stop_gradient(self.auxiliary_task.features)
+            self.features = torch.stop_gradient(self.auxiliary_task.features)
 
         self.out_features = self.auxiliary_task.next_features
 
-        with tf.compat.v1.variable_scope(self.scope + "_loss"):
-            self.loss = self.get_loss()
+        self.loss = self.get_loss()
 
     def get_features(self, x, reuse):
-        nl = tf.nn.leaky_relu
+        nl = torch.nn.LeakyReLU
         x_has_timesteps = (x.get_shape().ndims == 5)
         if x_has_timesteps:
-            sh = tf.shape(x)
+            sh = torch.shape(x)
             x = flatten_two_dims(x)
-        with tf.compat.v1.variable_scope(self.scope + "_features", reuse=reuse):
-            x = (tf.cast(x, dtype=tf.float32) - self.ob_mean) / self.ob_std
-            x = small_convnet(x, nl=nl, feat_dim=self.feat_dim, last_nl=nl, layernormalize=False)
+        x = (torch.cast(x, dtype=torch.float32) - self.ob_mean) / self.ob_std
+        x = small_convnet(x, nl=nl, feat_dim=self.feat_dim, last_nl=nl, layernormalize=False)
         if x_has_timesteps:
             x = unflatten_first_dim(x, sh)
         return x
 
     def get_loss(self):
-        ac = tf.one_hot(self.ac, self.ac_space.n, axis=2)
-        sh = tf.shape(ac)
+        ac = torch.one_hot(self.ac, self.ac_space.n, axis=2)
+        sh = torch.shape(ac)
         ac = flatten_two_dims(ac)
 
         def add_ac(x):
-            return tf.concat([x, ac], axis=-1)
+            return torch.concat([x, ac], axis=-1)
 
-        with tf.compat.v1.variable_scope(self.scope):
-            x = flatten_two_dims(self.features)
-            x = tf.compat.v1.layers.dense(add_ac(x), self.hidsize, activation=tf.nn.leaky_relu)
+        x = flatten_two_dims(self.features)
+        x = torch.nn.Linear(add_ac(x), self.hidsize, activation=torch.nn.leaky_relu)
 
-            def residual(x):
-                res = tf.compat.v1.layers.dense(add_ac(x), self.hidsize, activation=tf.nn.leaky_relu)
-                res = tf.compat.v1.layers.dense(add_ac(res), self.hidsize, activation=None)
-                return x + res
+        def residual(x):
+            res = torch.nn.Linear(add_ac(x), self.hidsize, activation=torch.nn.leaky_relu)
+            res = torch.nn.Linear(add_ac(res), self.hidsize, activation=None)
+            return x + res
 
-            for _ in range(4):
-                x = residual(x)
-            n_out_features = self.out_features.get_shape()[-1].value
-            x = tf.compat.v1.layers.dense(add_ac(x), n_out_features, activation=None)
-            x = unflatten_first_dim(x, sh)
-        return tf.reduce_mean((x - tf.stop_gradient(self.out_features)) ** 2, -1)
+        for _ in range(4):
+            x = residual(x)
+        n_out_features = self.out_features.get_shape()[-1].value
+        x = torch.nn.Linear(add_ac(x), n_out_features, activation=None)
+        x = unflatten_first_dim(x, sh)
+        return torch.reduce_mean((x - torch.stop_gradient(self.out_features)) ** 2, -1)
 
     def calculate_loss(self, ob, last_ob, acs):
         n_chunks = 8
@@ -88,24 +84,23 @@ class UNet(Dynamics):
         raise NotImplementedError
 
     def get_loss(self):
-        nl = tf.nn.leaky_relu
-        ac = tf.one_hot(self.ac, self.ac_space.n, axis=2)
-        sh = tf.shape(ac)
+        nl = torch.nn.leaky_relu
+        ac = torch.one_hot(self.ac, self.ac_space.n, axis=2)
+        sh = torch.shape(ac)
         ac = flatten_two_dims(ac)
-        ac_four_dim = tf.expand_dims(tf.expand_dims(ac, 1), 1)
+        ac_four_dim = torch.expand_dims(torch.expand_dims(ac, 1), 1)
 
         def add_ac(x):
             if x.get_shape().ndims == 2:
-                return tf.concat([x, ac], axis=-1)
+                return torch.concat([x, ac], axis=-1)
             elif x.get_shape().ndims == 4:
-                sh = tf.shape(x)
-                return tf.concat(
-                    [x, ac_four_dim + tf.zeros([sh[0], sh[1], sh[2], ac_four_dim.get_shape()[3].value], tf.float32)],
+                sh = torch.shape(x)
+                return torch.concat(
+                    [x, ac_four_dim + torch.zeros([sh[0], sh[1], sh[2], ac_four_dim.get_shape()[3].value], torch.float32)],
                     axis=-1)
 
-        with tf.compat.v1.variable_scope(self.scope):
-            x = flatten_two_dims(self.features)
-            x = unet(x, nl=nl, feat_dim=self.feat_dim, cond=add_ac)
-            x = unflatten_first_dim(x, sh)
+        x = flatten_two_dims(self.features)
+        x = unet(x, nl=nl, feat_dim=self.feat_dim, cond=add_ac)
+        x = unflatten_first_dim(x, sh)
         self.prediction_pixels = x * self.ob_std + self.ob_mean
-        return tf.reduce_mean((x - tf.stop_gradient(self.out_features)) ** 2, [2, 3, 4])
+        return torch.reduce_mean((x - torch.stop_gradient(self.out_features)) ** 2, [2, 3, 4])

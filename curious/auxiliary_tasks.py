@@ -1,7 +1,7 @@
 import tensorflow as tf
 import torch
 
-from utils import small_convnet, fc, activ, flatten_two_dims, unflatten_first_dim, small_deconvnet
+from curious.utils import small_convnet, fc, activ, flatten_two_dims, unflatten_first_dim, small_deconvnet
 
 
 class FeatureExtractor(object):
