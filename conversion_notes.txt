@@ -1,0 +1,6 @@
+run.py main method parses args and then calls start_experiment
+start_experiment sets up the environment and then creates a Trainer object
+Trainer takes the env, the args, the number of timesteps, then starts defining a model
+    it gets a feature_extractor, and I'm just trying to simplify here, so I will only implement JustPixels
+    since I will only use JustPixels, I need UNet for dynamics
+    then it gets an agent, which is the PpoOptimizer from cppo_agent

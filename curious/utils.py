@@ -5,24 +5,24 @@ from functools import partial
 
 import numpy as np
 import tensorflow as tf
-from stable_baselines3.common.tf_util import normc_initializer
+import torch
 from mpi4py import MPI
 
 
-def bcast_tf_vars_from_root(sess, vars):
-    """
-    Send the root node's parameters to every worker.
+# def bcast_tf_vars_from_root(sess, vars):
+#     """
+#     Send the root node's parameters to every worker.
 
-    Arguments:
-      sess: the TensorFlow session.
-      vars: all parameter variables including optimizer's
-    """
-    rank = MPI.COMM_WORLD.Get_rank()
-    for var in vars:
-        if rank == 0:
-            MPI.COMM_WORLD.bcast(sess.run(var))
-        else:
-            sess.run(tf.compat.v1.assign(var, MPI.COMM_WORLD.bcast(None)))
+#     Arguments:
+#       sess: the TensorFlow session.
+#       vars: all parameter variables including optimizer's
+#     """
+#     rank = MPI.COMM_WORLD.Get_rank()
+#     for var in vars:
+#         if rank == 0:
+#             MPI.COMM_WORLD.bcast(sess.run(var))
+#         else:
+#             sess.run(tf.compat.v1.assign(var, MPI.COMM_WORLD.bcast(None)))
 
 
 def get_mean_and_std(array):
@@ -48,6 +48,7 @@ def guess_available_gpus(n_gpus=None):
         return list(range(n_gpus))
     if 'CUDA_VISIBLE_DEVICES' in os.environ:
         cuda_visible_divices = os.environ['CUDA_VISIBLE_DEVICES']
+        print(cuda_visible_divices)
         cuda_visible_divices = cuda_visible_divices.split(',')
         return [int(n) for n in cuda_visible_divices]
     nvidia_dir = '/proc/driver/nvidia/gpus/'
@@ -108,11 +109,15 @@ def layernorm(x):
     m, v = tf.nn.moments(x, -1, keepdims=True)
     return (x - m) / (tf.sqrt(v) + 1e-8)
 
-
-getsess = tf.compat.v1.get_default_session
+def normc_initializer(std=1.0, axis=0):
+    def _initializer(shape, dtype=None, partition_info=None):  # pylint: disable=W0613
+        out = np.random.randn(*shape).astype(dtype.as_numpy_dtype)
+        out *= std / np.sqrt(np.square(out).sum(axis=axis, keepdims=True))
+        return tf.constant(out)
+    return _initializer
 
 fc = partial(tf.compat.v1.layers.dense, kernel_initializer=normc_initializer(1.))
-activ = tf.nn.relu
+activ = torch.nn.relu
 
 
 def flatten_two_dims(x):

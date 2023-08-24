@@ -9,10 +9,8 @@ from mpi4py import MPI
 
 from mpi_utils import MpiAdamOptimizer
 from rollouts import Rollout
-from utils import bcast_tf_vars_from_root, get_mean_and_std
+from utils import bcast_tf_vars_from_root, get_mean_and_std, getsess
 from vec_env import ShmemVecEnv as VecEnv
-
-getsess = tf.compat.v1.get_default_session
 
 
 class PpoOptimizer(object):
@@ -83,7 +81,7 @@ class PpoOptimizer(object):
 
         if MPI.COMM_WORLD.Get_rank() == 0:
             getsess().run(tf.compat.v1.variables_initializer(tf.compat.v1.get_collection(tf.compat.v1.GraphKeys.GLOBAL_VARIABLES)))
-        bcast_tf_vars_from_root(getsess(), tf.compat.v1.get_collection(tf.compat.v1.GraphKeys.GLOBAL_VARIABLES))
+        #bcast_tf_vars_from_root(getsess(), tf.compat.v1.get_collection(tf.compat.v1.GraphKeys.GLOBAL_VARIABLES))
 
         self.all_visited_rooms = []
         self.all_scores = []
